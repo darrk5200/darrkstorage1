@@ -5,6 +5,7 @@ import FileUpload from "@/components/file-upload";
 import FileGrid from "@/components/file-grid";
 import FolderGrid from "@/components/folder-grid";
 import ImageModal from "@/components/image-modal";
+import TextModal from "@/components/text-modal";
 import DeleteModal from "@/components/delete-modal";
 import RenameModal from "@/components/rename-modal";
 import CreateFolderModal from "@/components/create-folder-modal";
@@ -30,6 +31,7 @@ import {
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
+  const [selectedTextFile, setSelectedTextFile] = useState<FileRecord | null>(null);
   const [fileToDelete, setFileToDelete] = useState<FileRecord | null>(null);
   const [fileToRename, setFileToRename] = useState<FileRecord | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<FolderInfo | null>(null);
@@ -57,6 +59,12 @@ export default function Home() {
     enabled: !!currentFolder,
     staleTime: 0, // Don't use stale data
     gcTime: 0, // Don't cache results (renamed from cacheTime in v5)
+    queryFn: async () => {
+      if (!currentFolder) throw new Error('No current folder');
+      const response = await fetch(`/api/folders/${encodeURIComponent(currentFolder)}/contents`);
+      if (!response.ok) throw new Error('Failed to fetch folder contents');
+      return response.json();
+    }
   }) as { data: FolderInfo | undefined, isLoading: boolean, refetch: () => void };
   
 
@@ -247,11 +255,58 @@ export default function Home() {
     setFolderToPin(folder);
   };
 
+  const handleDownloadFolder = async (folder: FolderInfo) => {
+    try {
+      const response = await fetch(`/api/folders/${encodeURIComponent(folder.path)}/download`);
+      
+      if (!response.ok) {
+        const error = await response.json();
+        toast({
+          title: "Download failed",
+          description: error.message || "Failed to download folder",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create a blob from the response
+      const blob = await response.blob();
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = `${folder.name}.zip`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({
+        title: "Download started",
+        description: `Downloading ${folder.name}.zip`,
+      });
+    } catch (error) {
+      toast({
+        title: "Download failed",
+        description: "An error occurred while downloading the folder",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Header files={files} />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!isSearching && <FileUpload onUpload={handleFileUpload} currentFolder={currentFolder} />}
+
         {/* Breadcrumb Navigation */}
         <nav className="flex items-center space-x-2 mb-6" aria-label="Breadcrumb">
           <Button 
@@ -281,8 +336,6 @@ export default function Home() {
             <span className="text-foreground font-medium">All Files</span>
           )}
         </nav>
-
-        {!isSearching && <FileUpload onUpload={handleFileUpload} currentFolder={currentFolder} />}
 
         {/* Create Folder Button - only show in main directory */}
         {!currentFolder && !isSearching && (
@@ -383,6 +436,7 @@ export default function Home() {
                     onDeleteAllImages={handleDeleteAllImages}
                     onRenameFolder={handleRenameFolder}
                     onAddPin={handleAddPin}
+                    onDownloadFolder={handleDownloadFolder}
                     viewMode={viewMode}
                   />
                 </div>
@@ -395,6 +449,8 @@ export default function Home() {
                     files={searchResults.files} 
                     onDelete={setFileToDelete}
                     onRename={handleRename}
+                    onImageView={setSelectedFile}
+                    onTextView={setSelectedTextFile}
                   />
                 </div>
               )}
@@ -439,6 +495,7 @@ export default function Home() {
                     onDeleteAllImages={handleDeleteAllImages}
                     onRenameFolder={handleRenameFolder}
                     onAddPin={handleAddPin}
+                    onDownloadFolder={handleDownloadFolder}
                     viewMode={viewMode}
                   />
                 </div>
@@ -450,6 +507,8 @@ export default function Home() {
                     files={currentFolderData.files} 
                     onDelete={setFileToDelete}
                     onRename={handleRename}
+                    onImageView={setSelectedFile}
+                    onTextView={setSelectedTextFile}
                   />
                 </div>
               )}
@@ -496,6 +555,7 @@ export default function Home() {
                   onDeleteAllImages={handleDeleteAllImages}
                   onRenameFolder={handleRenameFolder}
                   onAddPin={handleAddPin}
+                  onDownloadFolder={handleDownloadFolder}
                   viewMode={viewMode}
                 />
               </div>
@@ -507,6 +567,8 @@ export default function Home() {
                   files={files.filter(f => !f.folderPath)} 
                   onDelete={setFileToDelete}
                   onRename={handleRename}
+                  onImageView={setSelectedFile}
+                  onTextView={setSelectedTextFile}
                 />
               </div>
             )}
@@ -529,8 +591,18 @@ export default function Home() {
         file={selectedFile}
         isOpen={!!selectedFile}
         onClose={() => setSelectedFile(null)}
-        files={currentFolder && currentFolderData ? currentFolderData.files : files.filter(f => !f.folderPath)}
+        files={isSearching && searchResults 
+          ? searchResults.files.filter(f => f.mimeType.startsWith('image/'))
+          : currentFolder && currentFolderData 
+            ? currentFolderData.files.filter(f => f.mimeType.startsWith('image/')) 
+            : files.filter(f => !f.folderPath && f.mimeType.startsWith('image/'))
+        }
         onNavigate={setSelectedFile}
+      />
+
+      <TextModal
+        file={selectedTextFile}
+        onClose={() => setSelectedTextFile(null)}
       />
 
       <DeleteModal

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FileRecord } from "@shared/schema";
-import { Eye, Download, Edit2, Trash2, Play, Video } from "lucide-react";
+import { Eye, Download, Edit2, Trash2, Play, Video, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -23,18 +23,36 @@ interface FileGridProps {
   files: FileRecord[];
   onRename: (file: FileRecord) => void;
   onDelete: (file: FileRecord) => void;
+  onImageView?: (file: FileRecord) => void;
+  onTextView?: (file: FileRecord) => void;
 }
 
-export default function FileGrid({ files, onRename, onDelete }: FileGridProps) {
+export default function FileGrid({ files, onRename, onDelete, onImageView, onTextView }: FileGridProps) {
   const [selectedFile, setSelectedFile] = useState<FileRecord | null>(null);
   const [showPlayer, setShowPlayer] = useState(false);
+
+  const isTextFile = (mimeType: string, filename: string) => {
+    return mimeType.startsWith('text/') || 
+           mimeType === 'application/json' ||
+           mimeType === 'application/javascript' ||
+           mimeType === 'application/xml' ||
+           ['.txt', '.csv', '.js', '.css', '.html', '.xml', '.json', '.md', '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs', '.ts', '.tsx', '.jsx', '.vue', '.yml', '.yaml'].some(ext => 
+             filename.toLowerCase().endsWith(ext)
+           );
+  };
 
   const handleView = (file: FileRecord) => {
     if (file.mimeType.startsWith('video/')) {
       setSelectedFile(file);
       setShowPlayer(true);
+    } else if (file.mimeType.startsWith('image/') && onImageView) {
+      // For images, open in modal
+      onImageView(file);
+    } else if (isTextFile(file.mimeType, file.originalName) && onTextView) {
+      // For text files, open in text modal
+      onTextView(file);
     } else {
-      // For images, open in new tab
+      // Fallback to open in new tab
       window.open(`/api/files/${file.id}/view`, '_blank');
     }
   };
@@ -62,29 +80,17 @@ export default function FileGrid({ files, onRename, onDelete }: FileGridProps) {
             {/* File Preview */}
             <div className="relative aspect-square bg-muted">
               {isImage(file.mimeType) ? (
-                file.thumbnailPath ? (
-                  <img
-                    src={`/api/files/${file.id}/thumbnail`}
-                    alt={file.originalName}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      target.nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                ) : (
-                  <img
-                    src={`/api/files/${file.id}/view`}
-                    alt={file.originalName}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      target.nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                )
+                <img
+                  src={`/api/files/${file.id}/view`}
+                  alt={file.originalName}
+                  className="w-full h-full object-cover cursor-pointer"
+                  onClick={() => handleView(file)}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                    target.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
               ) : isVideo(file.mimeType) ? (
                 file.thumbnailPath ? (
                   <div className="relative w-full h-full">
@@ -113,6 +119,15 @@ export default function FileGrid({ files, onRename, onDelete }: FileGridProps) {
                     </div>
                   </div>
                 )
+              ) : isTextFile(file.mimeType, file.originalName) ? (
+                <div className="w-full h-full bg-muted flex items-center justify-center cursor-pointer" onClick={() => handleView(file)}>
+                  <div className="text-center">
+                    <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-xs text-muted-foreground">
+                      {file.originalName.split('.').pop()?.toUpperCase() || 'TEXT'}
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <div className="w-full h-full bg-muted flex items-center justify-center">
                   <div className="text-center">

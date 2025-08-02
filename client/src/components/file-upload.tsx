@@ -121,7 +121,11 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
     onDrop,
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'],
-      'video/*': ['.mp4', '.webm', '.ogg', '.avi', '.mov']
+      'video/*': ['.mp4', '.webm', '.ogg', '.avi', '.mov'],
+      'text/*': ['.txt', '.csv', '.js', '.css', '.html', '.xml', '.json', '.md'],
+      'application/json': ['.json'],
+      'application/javascript': ['.js'],
+      'application/xml': ['.xml']
     },
     multiple: true,
     disabled: uploadMutation.isPending,
@@ -175,8 +179,8 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
       
       const contentType = response.headers.get('content-type') || '';
       
-      // Only process image and video files
-      if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
+      // Only process image, video, and text files
+      if (!contentType.startsWith('image/') && !contentType.startsWith('video/') && !contentType.startsWith('text/') && !contentType.includes('json') && !contentType.includes('javascript') && !contentType.includes('xml')) {
         return null;
       }
       

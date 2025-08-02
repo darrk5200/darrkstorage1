@@ -1,5 +1,5 @@
 import { FolderInfo } from "@shared/schema";
-import { Folder, Image, MoreVertical, Trash2, ImageOff, Edit2, Lock } from "lucide-react";
+import { Folder, Image, MoreVertical, Trash2, ImageOff, Edit2, Lock, Download } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,10 +16,11 @@ interface FolderGridProps {
   onDeleteAllImages?: (folder: FolderInfo) => void;
   onRenameFolder?: (folder: FolderInfo) => void;
   onAddPin?: (folder: FolderInfo) => void;
+  onDownloadFolder?: (folder: FolderInfo) => void;
   viewMode: 'grid' | 'list';
 }
 
-export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onDeleteAllImages, onRenameFolder, onAddPin, viewMode }: FolderGridProps) {
+export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onDeleteAllImages, onRenameFolder, onAddPin, onDownloadFolder, viewMode }: FolderGridProps) {
   const handleActionClick = (e: React.MouseEvent, action: () => void) => {
     e.stopPropagation();
     action();
@@ -47,7 +48,7 @@ export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onD
               </p>
             </div>
 
-            {(onDeleteFolder || onDeleteAllImages || onRenameFolder || onAddPin) && (
+            {(onDeleteFolder || onDeleteAllImages || onRenameFolder || onAddPin || onDownloadFolder) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -74,6 +75,14 @@ export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onD
                     >
                       <Lock className="w-4 h-4 mr-2" />
                       Add PIN
+                    </DropdownMenuItem>
+                  )}
+                  {onDownloadFolder && folder.fileCount > 0 && (
+                    <DropdownMenuItem
+                      onClick={(e) => handleActionClick(e, () => onDownloadFolder(folder))}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Download all
                     </DropdownMenuItem>
                   )}
                   {onDeleteAllImages && folder.fileCount > 0 && (
@@ -118,7 +127,7 @@ export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onD
                 <Image className="w-3 h-3 text-primary" />
               </div>
               
-              {(onDeleteFolder || onDeleteAllImages || onRenameFolder || onAddPin) && (
+              {(onDeleteFolder || onDeleteAllImages || onRenameFolder || onAddPin || onDownloadFolder) && (
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -146,6 +155,14 @@ export default function FolderGrid({ folders, onFolderClick, onDeleteFolder, onD
                         >
                           <Lock className="w-4 h-4 mr-2" />
                           Add PIN
+                        </DropdownMenuItem>
+                      )}
+                      {onDownloadFolder && folder.fileCount > 0 && (
+                        <DropdownMenuItem
+                          onClick={(e) => handleActionClick(e, () => onDownloadFolder(folder))}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Download all
                         </DropdownMenuItem>
                       )}
                       {onDeleteAllImages && folder.fileCount > 0 && (

@@ -12,6 +12,7 @@ export interface IStorage {
   searchFiles(query: string, folderPath?: string): Promise<FileRecord[]>;
   searchAll(query: string): Promise<{ files: FileRecord[]; folders: FolderInfo[] }>;
   getFolders(): Promise<FolderInfo[]>;
+  getFolderByPath(folderPath: string): Promise<FolderInfo | null>;
   createFolder(folderPath: string): Promise<boolean>;
   getFilesInFolder(folderPath: string): Promise<FileRecord[]>;
   deleteFolder(folderPath: string): Promise<boolean>;
@@ -163,6 +164,83 @@ export class MemStorage implements IStorage {
     return Array.from(folders.values())
       .filter(folder => !folder.parentPath || !folders.has(folder.parentPath))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async getFolderByPath(folderPath: string): Promise<FolderInfo | null> {
+    const allFiles = Array.from(this.files.values());
+    const folderMap = new Map<string, FileRecord[]>();
+    const allFolderPaths = new Set<string>();
+    
+    // Collect all files by folder path and build full folder tree
+    allFiles.forEach(file => {
+      if (file.folderPath) {
+        if (!folderMap.has(file.folderPath)) {
+          folderMap.set(file.folderPath, []);
+        }
+        folderMap.get(file.folderPath)!.push(file);
+        
+        // Add all parent paths to ensure we have the full tree
+        const pathParts = file.folderPath.split('/');
+        for (let i = 1; i <= pathParts.length; i++) {
+          const parentPath = pathParts.slice(0, i).join('/');
+          allFolderPaths.add(parentPath);
+        }
+      }
+    });
+
+    // Also scan file system for empty directories
+    try {
+      const uploadsPath = this.uploadsDir;
+      if (fs.existsSync(uploadsPath)) {
+        const entries = fs.readdirSync(uploadsPath, { withFileTypes: true });
+        entries.forEach(entry => {
+          if (entry.isDirectory() && entry.name !== 'thumbnails') {
+            allFolderPaths.add(entry.name);
+            this.scanForSubfolders(path.join(uploadsPath, entry.name), entry.name, allFolderPaths);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error scanning for empty folders:', error);
+    }
+    
+    // Check if the requested folder path exists
+    if (!allFolderPaths.has(folderPath)) {
+      return null;
+    }
+    
+    // Create folder info objects
+    const folders = new Map<string, FolderInfo>();
+    
+    for (const path of Array.from(allFolderPaths)) {
+      const pathParts = path.split('/');
+      const name = pathParts[pathParts.length - 1];
+      const parentPath = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : undefined;
+      const files = folderMap.get(path) || [];
+      
+      folders.set(path, {
+        name,
+        path,
+        parentPath,
+        fileCount: files.length,
+        subfolderCount: 0,
+        files: files.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+        subfolders: [],
+        hasPin: this.folderPins.has(path),
+        isLocked: this.folderPins.has(path)
+      });
+    }
+    
+    // Build hierarchy by linking subfolders to parents
+    for (const folder of Array.from(folders.values())) {
+      if (folder.parentPath && folders.has(folder.parentPath)) {
+        const parent = folders.get(folder.parentPath)!;
+        parent.subfolders.push(folder);
+        parent.subfolderCount++;
+      }
+    }
+    
+    return folders.get(folderPath) || null;
   }
 
   private scanForSubfolders(dirPath: string, relativePath: string, allFolderPaths: Set<string>): void {

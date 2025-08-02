@@ -8,29 +8,54 @@ import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
 import { nanoid } from "nanoid";
+import archiver from "archiver";
 
 const upload = multer({
   dest: 'uploads/',
   fileFilter: (req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
     const allowedMimeTypes = [
+      // Images
       'image/jpeg',
       'image/jpg', 
       'image/png',
       'image/webp',
       'image/gif',
       'image/svg+xml',
+      // Videos
       'video/mp4',
       'video/webm',
       'video/ogg',
       'video/avi',
       'video/mov',
-      'video/quicktime'
+      'video/quicktime',
+      // Text files
+      'text/plain',
+      'text/csv',
+      'text/javascript',
+      'text/css',
+      'text/html',
+      'text/xml',
+      'application/json',
+      'application/javascript',
+      'application/xml',
+      'application/csv'
+    ];
+
+    // Also check file extensions for text files since MIME types can be inconsistent
+    const allowedExtensions = [
+      '.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg',
+      '.mp4', '.webm', '.ogg', '.avi', '.mov',
+      '.txt', '.csv', '.js', '.css', '.html', '.xml', '.json',
+      '.md', '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb',
+      '.go', '.rs', '.ts', '.tsx', '.jsx', '.vue', '.yml', '.yaml'
     ];
     
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    const fileExtension = path.extname(file.originalname).toLowerCase();
+    
+    if (allowedMimeTypes.includes(file.mimetype) || allowedExtensions.includes(fileExtension)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only images and videos are allowed.'));
+      cb(new Error('Invalid file type. Only images, videos, and text files are allowed.'));
     }
   }
 });
@@ -60,29 +85,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/folders/:folderPath/contents", async (req, res) => {
     try {
       const folderPath = decodeURIComponent(req.params.folderPath);
-      const folders = await storage.getFolders();
+      console.log('Getting folder contents for path:', folderPath);
       
-      // Find the specific folder by searching through all folders (including nested ones)
-      const findFolder = (folders: any[], path: string): any => {
-        for (const folder of folders) {
-          if (folder.path === path) {
-            return folder;
-          }
-          if (folder.subfolders && folder.subfolders.length > 0) {
-            const found = findFolder(folder.subfolders, path);
-            if (found) return found;
-          }
-        }
-        return null;
-      };
-      
-      const folder = findFolder(folders, folderPath);
-      if (!folder) {
+      // Get folder directly from storage instead of searching through tree
+      const folderInfo = await storage.getFolderByPath(folderPath);
+      if (!folderInfo) {
+        console.log('Folder not found:', folderPath);
         return res.status(404).json({ message: "Folder not found" });
       }
       
-      res.json(folder);
+      console.log('Found folder:', folderInfo.name, 'Files:', folderInfo.files.length, 'Subfolders:', folderInfo.subfolders.length);
+      res.json(folderInfo);
     } catch (error) {
+      console.error('Error getting folder contents:', error);
       res.status(500).json({ message: "Failed to get folder contents" });
     }
   });
@@ -148,28 +163,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Move file to final location
         fs.renameSync(file.path, finalPath);
 
-        // Generate thumbnail
+        // Generate thumbnail only for videos
         let thumbnailPath: string | undefined;
         try {
-          const thumbnailFilename = `thumb_${path.parse(filename).name}.jpg`;
-          thumbnailPath = path.join('uploads', 'thumbnails', thumbnailFilename);
-          
-          // Ensure thumbnails directory exists
-          const thumbnailDir = path.dirname(thumbnailPath);
-          if (!fs.existsSync(thumbnailDir)) {
-            fs.mkdirSync(thumbnailDir, { recursive: true });
-          }
-          
-          if (file.mimetype.startsWith('image/')) {
-            // Generate image thumbnail using Sharp
-            await sharp(finalPath)
-              .resize(300, 300, { 
-                fit: 'inside',
-                withoutEnlargement: true
-              })
-              .jpeg({ quality: 80 })
-              .toFile(thumbnailPath);
-          } else if (file.mimetype.startsWith('video/')) {
+          if (file.mimetype.startsWith('video/')) {
+            const thumbnailFilename = `thumb_${path.parse(filename).name}.jpg`;
+            thumbnailPath = path.join('uploads', 'thumbnails', thumbnailFilename);
+            
+            // Ensure thumbnails directory exists
+            const thumbnailDir = path.dirname(thumbnailPath);
+            if (!fs.existsSync(thumbnailDir)) {
+              fs.mkdirSync(thumbnailDir, { recursive: true });
+            }
+            
             // Generate video thumbnail using FFmpeg
             await new Promise<void>((resolve, reject) => {
               ffmpeg(finalPath)
@@ -332,6 +338,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Folder deleted successfully", deleted: success });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete folder" });
+    }
+  });
+
+  // Download all files in folder as zip
+  app.get("/api/folders/:folderPath/download", async (req, res) => {
+    try {
+      const folderPath = decodeURIComponent(req.params.folderPath);
+      console.log('Downloading folder:', folderPath);
+      
+      const folderInfo = await storage.getFolderByPath(folderPath);
+      if (!folderInfo) {
+        return res.status(404).json({ message: "Folder not found" });
+      }
+
+      if (folderInfo.files.length === 0) {
+        return res.status(400).json({ message: "No files to download in this folder" });
+      }
+
+      // Set headers for zip download
+      const folderName = folderInfo.name || 'folder';
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${folderName}.zip"`);
+
+      const archive = archiver('zip', { zlib: { level: 9 } });
+      
+      archive.pipe(res);
+
+      // Add each file to the archive
+      for (const file of folderInfo.files) {
+        try {
+          const filePath = file.path;
+          console.log('Adding file to archive:', filePath, 'exists:', fs.existsSync(filePath));
+          if (fs.existsSync(filePath)) {
+            archive.file(filePath, { name: file.originalName });
+          } else {
+            console.log('File does not exist:', filePath);
+          }
+        } catch (error) {
+          console.error('Error adding file to archive:', error);
+        }
+      }
+
+      await archive.finalize();
+    } catch (error) {
+      console.error('Error creating folder download:', error);
+      res.status(500).json({ message: "Failed to create folder download" });
     }
   });
 

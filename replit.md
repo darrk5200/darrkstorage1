@@ -4,6 +4,20 @@ DarrkStorage is a modern file hosting platform built with React and Express. It 
 
 # Recent Changes
 
+## Image Modal and Navigation Enhancement (February 2025)
+- Added direct image click functionality to open images in modal instead of new tabs
+- Implemented image navigation with arrow keys and buttons to switch between images
+- Enhanced image modal with keyboard shortcuts (arrow keys for navigation, escape to close)
+- Added cursor pointer styling to images for better UX indication
+- Modified file grid to support image modal opening through onImageView callback
+- Filtered image navigation to only include image files in the modal carousel
+
+## Thumbnail Generation Optimization (February 2025)
+- Modified thumbnail generation to only create thumbnails for video files
+- Images now display directly without thumbnail generation for better performance and quality
+- Updated file grid component to always show full images instead of checking for thumbnails
+- Reduced server processing time and storage requirements for image uploads
+
 ## Application Rename, Video Support, and URL Storage (January 2025)
 - Renamed application from "FileVault" to "DarrkStorage" across all components and documentation
 - Added comprehensive video file support (.mp4, .webm, .ogg, .avi, .mov, .quicktime)
