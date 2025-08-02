@@ -23,7 +23,7 @@ export default function Header({ files }: HeaderProps) {
           
           <div className="flex items-center space-x-4">
             <div className="text-sm text-muted-foreground">
-              {totalSizeGB} GB / {limitGB} GB used
+              
             </div>
             
           </div>
