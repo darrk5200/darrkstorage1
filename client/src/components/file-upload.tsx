@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,6 +18,7 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
   const [showUrlModal, setShowUrlModal] = useState(false);
   const [draggedUrl, setDraggedUrl] = useState<string>("");
   const { toast } = useToast();
+  const dropzoneRef = useRef<HTMLDivElement>(null);
 
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
@@ -61,6 +62,60 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
     
     uploadMutation.mutate(acceptedFiles);
   }, [uploadMutation]);
+
+  // Handle clipboard paste
+  const handlePaste = useCallback(async (e: ClipboardEvent) => {
+    if (!e.clipboardData) return;
+    
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+    
+    if (imageItems.length === 0) return;
+    
+    e.preventDefault();
+    
+    const files: File[] = [];
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (file) {
+        // Create a proper filename with timestamp
+        const timestamp = Date.now();
+        const extension = file.type.split('/')[1] || 'png';
+        const filename = `pasted-image-${timestamp}.${extension}`;
+        
+        // Create a new file with a proper name
+        const namedFile = new File([file], filename, { type: file.type });
+        files.push(namedFile);
+      }
+    }
+    
+    if (files.length > 0) {
+      uploadMutation.mutate(files);
+      toast({
+        title: "Image pasted",
+        description: `${files.length} image(s) pasted and uploaded successfully.`,
+      });
+    }
+  }, [uploadMutation, toast]);
+
+  // Add paste event listener
+  useEffect(() => {
+    const dropzoneElement = dropzoneRef.current;
+    if (!dropzoneElement) return;
+    
+    // Make the dropzone focusable
+    dropzoneElement.setAttribute('tabindex', '0');
+    
+    const handlePasteOnDropzone = (e: ClipboardEvent) => {
+      handlePaste(e);
+    };
+    
+    dropzoneElement.addEventListener('paste', handlePasteOnDropzone);
+    
+    return () => {
+      dropzoneElement.removeEventListener('paste', handlePasteOnDropzone);
+    };
+  }, [handlePaste]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -183,7 +238,8 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
     <div className="mb-8">
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer
+        ref={dropzoneRef}
+        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50
           ${isDragActive ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 bg-card/30 hover:bg-card/50'}
           ${uploadMutation.isPending ? 'pointer-events-none opacity-60' : ''}
         `}
@@ -197,7 +253,7 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {isDragActive ? 'Drop files, folders, or images from websites here' : 'Drop files, folders, or images from websites here to upload'}
             </h3>
-            <p className="text-muted-foreground mb-4">or click to browse files and folders</p>
+            <p className="text-muted-foreground mb-4">or click to browse files and folders, or paste images from clipboard</p>
             
             
           </div>
