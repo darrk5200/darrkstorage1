@@ -16,6 +16,7 @@ interface FileUploadProps {
 export default function FileUpload({ onUpload, currentFolder }: FileUploadProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showUrlModal, setShowUrlModal] = useState(false);
+  const [draggedUrl, setDraggedUrl] = useState<string>("");
   const { toast } = useToast();
 
   const uploadMutation = useMutation({
@@ -69,7 +70,7 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
     },
     multiple: true,
     disabled: uploadMutation.isPending,
-    // Handle folder drag and drop
+    // Handle folder drag and drop + external website files
     getFilesFromEvent: async (event: any) => {
       const files: File[] = [];
       
@@ -84,6 +85,23 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
               const entryFiles = await getFilesFromEntry(entry, '');
               files.push(...entryFiles);
             }
+          } else if (dataTransferItem.kind === 'string' && dataTransferItem.type === 'text/uri-list') {
+            // Handle URLs dragged from other websites
+            const urlData = await new Promise<string>((resolve) => {
+              dataTransferItem.getAsString(resolve);
+            });
+            
+            const urls = urlData.split('\n').filter(url => url.trim() && !url.startsWith('#'));
+            for (const url of urls) {
+              try {
+                const urlFile = await fetchFileFromUrl(url.trim());
+                if (urlFile) {
+                  files.push(urlFile);
+                }
+              } catch (error) {
+                console.warn('Failed to fetch file from URL:', url, error);
+              }
+            }
           }
         }
       }
@@ -92,6 +110,40 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
     }
   });
   
+  // Helper function to fetch file from external URL
+  const fetchFileFromUrl = async (url: string): Promise<File | null> => {
+    try {
+      const response = await fetch(url, { mode: 'cors' });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const contentType = response.headers.get('content-type') || '';
+      
+      // Only process image and video files
+      if (!contentType.startsWith('image/') && !contentType.startsWith('video/')) {
+        return null;
+      }
+      
+      const blob = await response.blob();
+      const filename = url.split('/').pop()?.split('?')[0] || 'downloaded_file';
+      
+      // Ensure proper file extension
+      let finalFilename = filename;
+      if (!finalFilename.includes('.')) {
+        const extension = contentType.split('/')[1]?.split(';')[0];
+        if (extension) {
+          finalFilename += `.${extension}`;
+        }
+      }
+      
+      return new File([blob], finalFilename, { type: contentType });
+    } catch (error) {
+      console.error('Error fetching file from URL:', error);
+      return null;
+    }
+  };
+
   // Helper function to recursively read files from directory entries
   const getFilesFromEntry = async (entry: any, basePath: string): Promise<File[]> => {
     const files: File[] = [];
@@ -143,7 +195,7 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
           </div>
           <div>
             <h3 className="text-lg font-semibold text-foreground mb-2">
-              {isDragActive ? 'Drop files or folders here' : 'Drop files or folders here to upload'}
+              {isDragActive ? 'Drop files, folders, or images from websites here' : 'Drop files, folders, or images from websites here to upload'}
             </h3>
             <p className="text-muted-foreground mb-4">or click to browse files and folders</p>
             
@@ -184,7 +236,28 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
               type="button"
               variant="secondary"
               disabled={uploadMutation.isPending}
-              onClick={() => setShowUrlModal(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowUrlModal(true);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const urlData = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+                if (urlData) {
+                  const urls = urlData.split('\n').filter(url => url.trim() && !url.startsWith('#'));
+                  if (urls.length > 0) {
+                    setDraggedUrl(urls[0].trim());
+                    setShowUrlModal(true);
+                  }
+                }
+              }}
+              className="transition-colors hover:bg-secondary/80 focus:ring-2 focus:ring-primary/50"
             >
               From URL
             </Button>
@@ -204,8 +277,12 @@ export default function FileUpload({ onUpload, currentFolder }: FileUploadProps)
       
       <UrlUploadModal
         isOpen={showUrlModal}
-        onClose={() => setShowUrlModal(false)}
+        onClose={() => {
+          setShowUrlModal(false);
+          setDraggedUrl("");
+        }}
         currentFolder={currentFolder || undefined}
+        initialUrl={draggedUrl}
       />
     </div>
   );

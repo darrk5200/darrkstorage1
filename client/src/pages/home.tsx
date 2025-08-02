@@ -425,7 +425,7 @@ export default function Home() {
           ) : currentFolderData ? (
             <div className="space-y-8">
               {/* Debug: Show current folder path */}
-              <div className="text-xs bg-blue-100 p-2 rounded">
+              <div className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 p-2 rounded">
                 Current Folder: "{currentFolder}" | Folder Name: "{currentFolderData.name}" | Files: {currentFolderData.files?.length || 0} | Subfolders: {currentFolderData.subfolders?.length || 0}
               </div>
 

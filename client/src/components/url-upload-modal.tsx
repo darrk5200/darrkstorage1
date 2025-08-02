@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,17 +19,26 @@ interface UrlUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentFolder?: string;
+  initialUrl?: string;
 }
 
 export default function UrlUploadModal({ 
   isOpen, 
   onClose, 
-  currentFolder 
+  currentFolder,
+  initialUrl 
 }: UrlUploadModalProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Set initial URL when modal opens
+  useEffect(() => {
+    if (isOpen && initialUrl) {
+      setUrl(initialUrl);
+    }
+  }, [isOpen, initialUrl]);
 
   const uploadMutation = useMutation({
     mutationFn: async (data: { url: string; folderPath?: string }) => {

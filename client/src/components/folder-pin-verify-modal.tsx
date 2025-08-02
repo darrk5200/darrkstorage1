@@ -35,7 +35,7 @@ export default function FolderPinVerifyModal({
 
   const verifyPinMutation = useMutation({
     mutationFn: async (data: { folderPath: string; pin: string }) => {
-      return apiRequest('POST', `/api/folders/${encodeURIComponent(data.folderPath)}/verify-pin`, {
+      return apiRequest('POST', `/api/folders/${encodeURIComponent(data.folderPath)}/unlock`, {
         pin: data.pin
       });
     },
