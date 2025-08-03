@@ -6,9 +6,6 @@ interface HeaderProps {
 }
 
 export default function Header({ files }: HeaderProps) {
-  const totalSize = files.reduce((acc, file) => acc + file.size, 0);
-  const totalSizeGB = (totalSize / (1024 * 1024 * 1024)).toFixed(1);
-  const limitGB = "10";
 
   return (
     <header className="bg-card border-b border-border">
@@ -21,12 +18,7 @@ export default function Header({ files }: HeaderProps) {
             <h1 className="text-xl font-bold text-foreground">DarrkStorage</h1>
           </div>
           
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-muted-foreground">
-              {totalSizeGB} GB / {limitGB} GB used
-            </div>
-            
-          </div>
+
         </div>
       </div>
     </header>

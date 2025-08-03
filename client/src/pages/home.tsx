@@ -188,7 +188,20 @@ export default function Home() {
   };
 
   const handleBackToFolders = () => {
-    setCurrentFolder(null);
+    if (!currentFolder) {
+      return; // Already at root
+    }
+    
+    // Get parent folder by removing the last segment
+    const pathSegments = currentFolder.split('/');
+    if (pathSegments.length === 1) {
+      // If only one segment (e.g., "asd"), go to root
+      setCurrentFolder(null);
+    } else {
+      // If multiple segments (e.g., "asd/subfolder"), go up one level
+      const parentPath = pathSegments.slice(0, -1).join('/');
+      setCurrentFolder(parentPath);
+    }
   };
 
   const handleDeleteFolder = (folder: FolderInfo) => {
@@ -313,32 +326,61 @@ export default function Home() {
             variant="ghost" 
             size="sm" 
             className="text-muted-foreground hover:text-foreground"
-            onClick={currentFolder ? handleBackToFolders : undefined}
+            onClick={() => setCurrentFolder(null)}
           >
             <HomeIcon className="w-4 h-4" />
           </Button>
-          <span className="text-muted-foreground">/</span>
-          {currentFolder ? (
+          
+          {currentFolder && (
             <>
+              <span className="text-muted-foreground">/</span>
+              {currentFolder.split('/').map((segment, index, segments) => {
+                const isLast = index === segments.length - 1;
+                const pathToSegment = segments.slice(0, index + 1).join('/');
+                
+                return (
+                  <div key={index} className="flex items-center space-x-2">
+                    {isLast ? (
+                      <span className="text-foreground font-medium">{segment}</span>
+                    ) : (
+                      <>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setCurrentFolder(pathToSegment)}
+                        >
+                          {segment}
+                        </Button>
+                        <span className="text-muted-foreground">/</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+              
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
-                className="text-muted-foreground hover:text-foreground"
+                className="ml-4"
                 onClick={handleBackToFolders}
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 mr-1" />
                 Back
               </Button>
-              <span className="text-muted-foreground">/</span>
-              <span className="text-foreground font-medium">{currentFolder}</span>
             </>
-          ) : (
-            <span className="text-foreground font-medium">All Files</span>
+          )}
+          
+          {!currentFolder && (
+            <>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-foreground font-medium">All Files</span>
+            </>
           )}
         </nav>
 
-        {/* Create Folder Button - only show in main directory */}
-        {!currentFolder && !isSearching && (
+        {/* Create Folder Button - show in all directories */}
+        {!isSearching && (
           <div className="mb-6">
             <Button 
               onClick={handleCreateFolder}
@@ -623,6 +665,7 @@ export default function Home() {
         isOpen={showCreateFolder}
         onClose={() => setShowCreateFolder(false)}
         onSuccess={handleFolderCreated}
+        currentFolder={currentFolder}
       />
 
       {/* Folder Delete Modal */}

@@ -11,18 +11,26 @@ interface CreateFolderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  currentFolder?: string | null;
 }
 
-export default function CreateFolderModal({ isOpen, onClose, onSuccess }: CreateFolderModalProps) {
+export default function CreateFolderModal({ isOpen, onClose, onSuccess, currentFolder }: CreateFolderModalProps) {
   const [folderName, setFolderName] = useState("");
   const { toast } = useToast();
   
+
+  
   const createFolderMutation = useMutation({
     mutationFn: async (folderName: string) => {
-      return apiRequest('POST', '/api/folders', { folderName });
+      const fullFolderPath = currentFolder ? `${currentFolder}/${folderName}` : folderName;
+
+      return apiRequest('POST', '/api/folders', { folderName: fullFolderPath });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/folders'] });
+      if (currentFolder) {
+        queryClient.invalidateQueries({ queryKey: ['/api/folders', currentFolder, 'contents'] });
+      }
       onSuccess();
       toast({
         title: "Folder created",
@@ -61,7 +69,10 @@ export default function CreateFolderModal({ isOpen, onClose, onSuccess }: Create
             <div>
               <DialogTitle className="text-lg font-semibold">Create New Folder</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Enter a name for your new folder
+                {currentFolder 
+                  ? `Create a new subfolder in ${currentFolder}`
+                  : "Enter a name for your new folder"
+                }
               </p>
             </div>
           </div>

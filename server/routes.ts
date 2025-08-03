@@ -402,12 +402,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/folders", async (req, res) => {
     try {
       const { folderName } = req.body;
+      console.log('Creating folder with name:', folderName);
       if (!folderName || typeof folderName !== 'string') {
         return res.status(400).json({ message: "Folder name is required" });
       }
 
-      // Sanitize folder name
-      const sanitizedName = folderName.trim().replace(/[<>:"/\\|?*]/g, '_');
+      // Sanitize folder name but preserve path separators
+      const sanitizedName = folderName.trim().replace(/[<>:"|?*\\]/g, '_');
+      console.log('Sanitized folder name:', sanitizedName);
       if (!sanitizedName) {
         return res.status(400).json({ message: "Invalid folder name" });
       }
